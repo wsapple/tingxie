@@ -95,6 +95,7 @@
         <label for="words">请输入要听写的词语（每个词一行）：</label>
         <textarea id="words" placeholder="例：\n春天\n小朋友\n美丽\n……"></textarea>
         <button id="startBtn">开始听写</button>
+        <!-- 暂停和继续按钮，初始都隐藏 -->
         <button id="pauseBtn" style="background:#888;display:none;">暂停</button>
         <button id="resumeBtn" style="background:#2e8b57;display:none;">继续</button>
         <button id="nextBtn" style="background:#1e90ff;display:none;">下一个词</button>
@@ -279,6 +280,9 @@
             status.textContent = '正在听写...';
             isPaused = false;
             skipToNext = false;
+            // 听写开始时显示暂停按钮，隐藏继续按钮
+            document.getElementById('pauseBtn').style.display = '';
+            document.getElementById('resumeBtn').style.display = 'none';
             document.getElementById('nextBtn').style.display = '';
             for (let i = 0; i < words.length; i++) {
                 let word = words[i];
@@ -298,6 +302,7 @@
             }
             status.textContent = '听写完成！';
             progress.textContent = '';
+            // 听写结束时隐藏所有控制按钮
             document.getElementById('pauseBtn').style.display = 'none';
             document.getElementById('resumeBtn').style.display = 'none';
             document.getElementById('nextBtn').style.display = 'none';
@@ -311,32 +316,35 @@
                 return;
             }
             this.disabled = true;
-            document.getElementById('pauseBtn').style.display = '';
-            document.getElementById('resumeBtn').style.display = 'none';
-            document.getElementById('nextBtn').style.display = '';
             dictationTask = startDictation(words);
             await dictationTask;
             this.disabled = false;
         };
 
+        // 暂停按钮点击事件
         document.getElementById('pauseBtn').onclick = function() {
-            isPaused = true;
-            window.speechSynthesis.pause();
-            document.getElementById('pauseBtn').style.display = 'none';
-            document.getElementById('resumeBtn').style.display = '';
+            isPaused = true; // 设置为暂停状态
+            window.speechSynthesis.pause(); // 如果在用浏览器语音朗读，则暂停
+            document.getElementById('pauseBtn').style.display = 'none'; // 隐藏暂停按钮
+            document.getElementById('resumeBtn').style.display = ''; // 显示继续按钮
         };
+        // 继续按钮点击事件
         document.getElementById('resumeBtn').onclick = function() {
-            isPaused = false;
-            window.speechSynthesis.resume();
-            if (pauseResolver) pauseResolver();
-            document.getElementById('pauseBtn').style.display = '';
-            document.getElementById('resumeBtn').style.display = 'none';
+            isPaused = false; // 恢复为非暂停状态
+            window.speechSynthesis.resume(); // 如果在用浏览器语音朗读，则继续
+            if (pauseResolver) pauseResolver(); // 恢复异步等待
+            document.getElementById('pauseBtn').style.display = ''; // 显示暂停按钮
+            document.getElementById('resumeBtn').style.display = 'none'; // 隐藏继续按钮
         };
+        // 【中文注释】
+        // 1. 听写过程中点击“暂停”，会暂停朗读并切换按钮为“继续”
+        // 2. 点击“继续”，恢复朗读并切换按钮为“暂停”
+        // 3. 按钮状态和isPaused变量始终保持同步
+
         document.getElementById('nextBtn').onclick = function() {
             skipToNext = true;
             window.speechSynthesis.cancel(); // 立即停止当前朗读
         };
-
     </script>
 </body>
 </html>
