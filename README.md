@@ -30,4 +30,4 @@ scripts.js      JavaScript 文件
 
 ## 安全说明
 
-API Key 使用环境变量方式存储，不在代码中明文显示。
+API Key 使用环境变量方式存储，不在代码中明文显示。1
