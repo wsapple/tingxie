@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chinese Name Generator</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <svg class="seal" viewBox="0 0 100 100" width="50" height="50">
+                    <circle cx="50" cy="50" r="45" fill="#C41E3A" stroke="#AF1E3A" stroke-width="2"/>
+                    <text x="50" y="65" text-anchor="middle" fill="#FFF" font-size="40">名</text>
+                </svg>
+            </div>
+            <h1><span class="cn">中文取名</span><span class="divider">·</span><span class="en">Chinese Name Generator</span></h1>
+            <p class="subtitle"><span class="en">Transform your English name into a meaningful Chinese name</span><br><span class="cn">获得独特而富有文化内涵的中文名字</span></p>
+        </header>
+
+        <main>
+            <div class="card input-section">
+                <div class="input-group">
+                    <input type="text" id="englishName" placeholder="Enter your English name" required>
+                    <button id="generateBtn" class="primary-button">
+                        <span class="en">Generate</span>
+                        <span class="cn">生成名字</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="loading" id="loading" style="display: none;">
+                <div class="loading-spinner"></div>
+                <p><span class="en">Creating your Chinese name</span><br><span class="cn">正在生成您的中文名...</span></p>
+            </div>
+
+            <div class="results" id="results">
+                <!-- 结果将通过JavaScript动态插入 -->
+            </div>
+        </main>
+
+        <footer>
+            <p>
+                <span class="en">Bridging cultures through AI-powered name generation</span>
+                <span class="divider">·</span>
+                <span class="cn">用人工智能连接东西方文化</span>
+            </p>
+        </footer>
+    </div>
+    <script src="scripts.js"></script>
+</body>
+</html>

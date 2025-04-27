@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>汉语词语听写助手</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="icon-192.png">
+    <meta name="theme-color" content="#C41E3A">
+    <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js');
+    }
+    </script>
+    <style>
+        body {
+            font-family: "Microsoft YaHei", Arial, sans-serif;
+            background: #fff8f0;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        h1 {
+            color: #C41E3A;
+            margin-top: 30px;
+            font-size: 2.2rem;
+        }
+        .container {
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+            padding: 32px 24px 24px 24px;
+            margin: 30px 0 0 0;
+            max-width: 400px;
+            width: 100%;
+        }
+        textarea {
+            width: 100%;
+            height: 120px;
+            border: 1px solid #D9D9D9;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 1.1rem;
+            resize: vertical;
+            margin-bottom: 12px;
+        }
+        button {
+            background: #C41E3A;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 0;
+            width: 100%;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            margin-bottom: 10px;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #AF1E3A;
+        }
+        .status {
+            text-align: center;
+            font-size: 1.1rem;
+            margin: 18px 0 10px 0;
+            color: #333;
+            min-height: 32px;
+        }
+        .progress {
+            text-align: center;
+            font-size: 1rem;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <h1>汉语词语听写助手</h1>
+    <div style="margin-bottom:10px;">
+        <label for="voiceSelect" style="font-size:1.1rem;">请选择发音人：</label>
+        <select id="voiceSelect" style="font-size:1.1rem;padding:3px 8px;">
+            <option value="xiaoyan">讯飞小燕（女声）</option>
+            <option value="aisjiuxu">讯飞许久（男声）</option>
+            <option value="aisxping">讯飞小萍（女声）</option>
+            <option value="aisjinger">讯飞小婧（女声）</option>
+            <option value="aisbabyxu">讯飞许小宝（童声）</option>
+        </select>
+    </div>
+    <div class="container">
+        <!-- 拍照/上传图片识别括号词语按钮 -->
+
+        <label for="words">请输入要听写的词语（每个词一行）：</label>
+        <textarea id="words" placeholder="例：\n春天\n小朋友\n美丽\n……"></textarea>
+        <button id="startBtn">开始听写</button>
+        <button id="pauseBtn" style="background:#888;display:none;">暂停</button>
+        <button id="resumeBtn" style="background:#2e8b57;display:none;">继续</button>
+        <button id="nextBtn" style="background:#1e90ff;display:none;">下一个词</button>
+        <div class="status" id="status">请点击“开始听写”</div>
+        <div class="progress" id="progress"></div>
+    </div>
+    <script>
+        // ========== 讯飞TTS WebAPI参数 ==========
+        const XF_APPID = '5e1d2e76';
+        const XF_APIKey = 'bb013dc196203172317aa356cd4b66a2';
+        const XF_APISecret = 'feff1abf7a02d8311651c84a8cb5f3f9';
+        const XF_URL = 'wss://tts-api.xfyun.cn/v2/tts';
+        // 发音人由下拉框动态选择，初始为小燕
+        let XF_VOICE = 'xiaoyan';
+
+        // ========== 工具函数：Base64编码、SHA256-HMAC、UTF8编码 ==========
+        // 浏览器原生支持atob/btoa，TextEncoder，crypto.subtle
+        function utf8ToBase64(str) {
+            return btoa(unescape(encodeURIComponent(str)));
+        }
+        function base64ToUint8Array(base64) {
+            const binary = atob(base64);
+            const len = binary.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+            return bytes;
+        }
+        async function hmacSHA256(key, msg) {
+            const enc = new TextEncoder();
+            const keyData = enc.encode(key);
+            const algoKey = await crypto.subtle.importKey('raw', keyData, {name: 'HMAC', hash: 'SHA-256'}, false, ['sign']);
+            const signature = await crypto.subtle.sign('HMAC', algoKey, enc.encode(msg));
+            return btoa(String.fromCharCode(...new Uint8Array(signature)));
+        }
+
+        // ========== 讯飞TTS主函数 ==========
+        async function xfyunSpeak(text) {
+            // 动态获取当前选择的发音人
+            XF_VOICE = document.getElementById('voiceSelect').value;
+            return new Promise(async (resolve, reject) => {
+                // 1. 生成鉴权参数
+                const now = Math.floor(Date.now() / 1000);
+                const date = new Date().toGMTString();
+                const host = 'tts-api.xfyun.cn';
+                const apiKey = XF_APIKey;
+                const apiSecret = XF_APISecret;
+                const appId = XF_APPID;
+                // 鉴权字符串
+                const signatureOrigin = `host: ${host}\ndate: ${date}\nGET /v2/tts HTTP/1.1`;
+                const signatureSha = await hmacSHA256(apiSecret, signatureOrigin);
+                const authorization = utf8ToBase64(`api_key=\"${apiKey}\", algorithm=\"hmac-sha256\", headers=\"host date request-line\", signature=\"${signatureSha}\"`);
+                // 拼接ws连接参数
+                const url = `${XF_URL}?authorization=${authorization}&date=${encodeURIComponent(date)}&host=${host}`;
+                // 2. 建立WebSocket连接
+                let ws;
+                try {
+                    ws = new WebSocket(url);
+                } catch (e) {
+                    reject('WebSocket连接失败');
+                    return;
+                }
+                let audioChunks = [];
+                let audioContext, source, audioBuffer;
+                ws.onopen = function () {
+                    // 3. 发送合成请求
+                    const req = {
+                        common: {app_id: appId},
+                        business: {
+                            aue: 'lame', // mp3格式
+                            auf: 'audio/L16;rate=16000',
+                            vcn: XF_VOICE,
+                            tte: 'utf8',
+                        },
+                        data: {
+                            status: 2, // 固定值2
+                            text: utf8ToBase64(text)
+                        }
+                    };
+                    ws.send(JSON.stringify(req));
+                };
+                ws.onerror = function (err) {
+                    reject('WebSocket错误');
+                };
+                ws.onmessage = async function (e) {
+                    const msg = JSON.parse(e.data);
+                    if (msg.code !== 0) {
+                        ws.close();
+                        reject('讯飞TTS接口错误：' + msg.message);
+                        return;
+                    }
+                    if (msg.data && msg.data.audio) {
+                        audioChunks.push(base64ToUint8Array(msg.data.audio));
+                    }
+                    if (msg.data && msg.data.status === 2) {
+                        ws.close();
+                        // 4. 播放音频
+                        try {
+                            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                            // 合并所有分片
+                            let totalLen = audioChunks.reduce((sum, arr) => sum + arr.length, 0);
+                            let audioData = new Uint8Array(totalLen);
+                            let pos = 0;
+                            for (let arr of audioChunks) {
+                                audioData.set(arr, pos);
+                                pos += arr.length;
+                            }
+                            // 解码mp3并播放
+                            audioContext.decodeAudioData(audioData.buffer, function(buffer) {
+                                source = audioContext.createBufferSource();
+                                source.buffer = buffer;
+                                source.connect(audioContext.destination);
+                                source.onended = function() {
+                                    audioContext.close();
+                                    resolve();
+                                };
+                                source.start();
+                            }, function(e){
+                                reject('音频解码失败');
+                            });
+                        } catch (err) {
+                            reject('音频播放失败');
+                        }
+                    }
+                };
+                ws.onclose = function () {};
+            });
+        }
+
+        // ========== 兼容：调用讯飞TTS朗读，失败时降级用浏览器语音 ==========
+        async function speak(text) {
+            try {
+                await xfyunSpeak(text);
+            } catch (e) {
+                // 讯飞TTS失败时，自动降级为浏览器自带语音
+                console.warn('讯飞TTS失败，降级为浏览器语音', e);
+                await new Promise((resolve) => {
+                    const synth = window.speechSynthesis;
+                    const utter = new window.SpeechSynthesisUtterance(text);
+                    utter.lang = 'zh-CN';
+                    utter.onend = resolve;
+                    synth.speak(utter);
+                });
+            }
+        }
+
+
+        // 监听发音人选择变化（可选：如需做自动记忆等扩展）
+        document.getElementById('voiceSelect').addEventListener('change', function() {
+            XF_VOICE = this.value;
+        });
+
+        // 听写流程的全局控制变量
+        let isPaused = false;
+        let pauseResolver = null;
+        let stopTimer = null;
+        let dictationTask = null;
+        let skipToNext = false;
+
+        // 暂停等待函数
+        function waitIfPaused() {
+            return new Promise(resolve => {
+                if (!isPaused) return resolve();
+                pauseResolver = resolve;
+            });
+        }
+
+        // 支持暂停和跳过的sleep
+        async function sleepWithPauseOrSkip(ms) {
+            let elapsed = 0;
+            const step = 100;
+            while (elapsed < ms) {
+                if (skipToNext) break;
+                await waitIfPaused();
+                await new Promise(res => stopTimer = setTimeout(res, step));
+                elapsed += step;
+            }
+        }
+
+        async function startDictation(words) {
+            const status = document.getElementById('status');
+            const progress = document.getElementById('progress');
+            status.textContent = '正在听写...';
+            isPaused = false;
+            skipToNext = false;
+            document.getElementById('nextBtn').style.display = '';
+            for (let i = 0; i < words.length; i++) {
+                let word = words[i];
+                progress.textContent = `第 ${i+1} / ${words.length} 个词语`;
+                status.textContent = `请听写：${word}`;
+                for (let j = 0; j < 3; j++) {
+                    await waitIfPaused(); if (skipToNext) break;
+                    await speak(word);
+                    await sleepWithPauseOrSkip(700); // 两遍之间短暂停顿
+                    if (skipToNext) break;
+                }
+                await sleepWithPauseOrSkip(7500); // 每个词后停7.5秒
+                if (skipToNext) {
+                    skipToNext = false;
+                    continue;
+                }
+            }
+            status.textContent = '听写完成！';
+            progress.textContent = '';
+            document.getElementById('pauseBtn').style.display = 'none';
+            document.getElementById('resumeBtn').style.display = 'none';
+            document.getElementById('nextBtn').style.display = 'none';
+        }
+
+        document.getElementById('startBtn').onclick = async function() {
+            const textarea = document.getElementById('words');
+            let words = textarea.value.split(/\n|\r|\s+/).map(w => w.trim()).filter(w => w);
+            if (words.length === 0) {
+                alert('请输入至少一个词语！');
+                return;
+            }
+            this.disabled = true;
+            document.getElementById('pauseBtn').style.display = '';
+            document.getElementById('resumeBtn').style.display = 'none';
+            document.getElementById('nextBtn').style.display = '';
+            dictationTask = startDictation(words);
+            await dictationTask;
+            this.disabled = false;
+        };
+
+        document.getElementById('pauseBtn').onclick = function() {
+            isPaused = true;
+            window.speechSynthesis.pause();
+            document.getElementById('pauseBtn').style.display = 'none';
+            document.getElementById('resumeBtn').style.display = '';
+        };
+        document.getElementById('resumeBtn').onclick = function() {
+            isPaused = false;
+            window.speechSynthesis.resume();
+            if (pauseResolver) pauseResolver();
+            document.getElementById('pauseBtn').style.display = '';
+            document.getElementById('resumeBtn').style.display = 'none';
+        };
+        document.getElementById('nextBtn').onclick = function() {
+            skipToNext = true;
+            window.speechSynthesis.cancel(); // 立即停止当前朗读
+        };
+
+    </script>
+</body>
+</html>
