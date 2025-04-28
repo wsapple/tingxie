@@ -2,9 +2,19 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <!-- 优化移动端显示，禁止缩放 -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="format-detection" content="telephone=no">
+    <!-- 添加到主屏幕相关meta -->
     <title>汉语词语听写助手</title>
     <link rel="manifest" href="manifest.json">
+    <!-- 添加到主屏幕的图标 -->
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="apple-touch-icon" sizes="512x512" href="icon-512.png">
+    <!-- manifest.json 已包含相关配置 -->
     <link rel="icon" href="icon-192.png">
     <meta name="theme-color" content="#C41E3A">
     <script>
@@ -13,6 +23,72 @@
     }
     </script>
     <style>
+        /* 移动端优化：让页面适配各种屏幕 */
+        html {
+            font-size: 18px;
+        }
+        body {
+            font-family: "Microsoft YaHei", Arial, sans-serif;
+            background: #fff8f0;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+            padding: 32px 16px 24px 16px;
+            margin: 30px 0 0 0;
+            max-width: 420px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        textarea {
+            width: 100%;
+            min-height: 90px;
+            font-size: 1.1rem;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            margin: 10px 0 18px 0;
+            box-sizing: border-box;
+            resize: vertical;
+        }
+        button {
+            width: 100%;
+            padding: 14px 0;
+            font-size: 1.1rem;
+            border: none;
+            border-radius: 8px;
+            margin: 8px 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        button:active {
+            opacity: 0.8;
+        }
+        #status {
+            margin: 16px 0 6px 0;
+            font-size: 1.05rem;
+        }
+        #progress {
+            font-size: 0.95rem;
+            color: #888;
+        }
+        @media (max-width: 500px) {
+            html { font-size: 16px; }
+            .container { max-width: 98vw; padding: 18px 4vw 18px 4vw; }
+            h1 { font-size: 1.4rem; }
+            button { font-size: 1rem; padding: 13px 0; }
+        }
+        /* 隐藏滚动条 */
+        ::-webkit-scrollbar { width: 0; background: transparent; }
+    
         body {
             font-family: "Microsoft YaHei", Arial, sans-serif;
             background: #fff8f0;
@@ -101,6 +177,11 @@
         <button id="nextBtn" style="background:#1e90ff;display:none;">下一个词</button>
         <div class="status" id="status">请点击“开始听写”</div>
         <div class="progress" id="progress"></div>
+        <!-- 新增：历史听写记录展示区 -->
+        <div id="historyContainer" style="margin-top:20px;">
+            <div style="font-size:1rem;color:#C41E3A;margin-bottom:6px;">历史听写记录：</div>
+            <div id="historyList"></div>
+        </div>
     </div>
     <script>
         // ========== 讯飞TTS WebAPI参数 ==========
@@ -308,6 +389,57 @@
             document.getElementById('nextBtn').style.display = 'none';
         }
 
+        // 保存历史听写记录到localStorage
+        function saveHistory(wordsArr) {
+            if (!wordsArr || wordsArr.length === 0) return;
+            let history = JSON.parse(localStorage.getItem('dictationHistory') || '[]');
+            // 如果已存在完全相同的记录，则不重复保存
+            if (!history.some(item => JSON.stringify(item) === JSON.stringify(wordsArr))) {
+                history.unshift(wordsArr); // 新记录放前面
+                // 最多保存20条
+                if (history.length > 20) history = history.slice(0, 20);
+                localStorage.setItem('dictationHistory', JSON.stringify(history));
+            }
+        }
+        // 渲染历史记录到页面
+        function renderHistory() {
+            let history = JSON.parse(localStorage.getItem('dictationHistory') || '[]');
+            const historyList = document.getElementById('historyList');
+            if (history.length === 0) {
+                historyList.innerHTML = '<span style="color:#aaa;font-size:0.95rem;">暂无历史记录</span>';
+                return;
+            }
+            historyList.innerHTML = '';
+            history.forEach((wordsArr, idx) => {
+                // 用“，”拼接展示
+                const wordsStr = wordsArr.join('，');
+                const div = document.createElement('div');
+                div.style.cssText = 'background:#f8f8f8;border-radius:8px;padding:8px 10px;margin-bottom:7px;display:flex;align-items:center;';
+                // 历史词语文本
+                const span = document.createElement('span');
+                span.textContent = wordsStr;
+                span.style.cssText = 'flex:1;cursor:pointer;';
+                span.title = '点击自动填入输入框';
+                // 点击填充输入框
+                span.onclick = function() {
+                    document.getElementById('words').value = wordsArr.join('\n');
+                };
+                // 删除按钮
+                const delBtn = document.createElement('button');
+                delBtn.textContent = '删除';
+                delBtn.style.cssText = 'margin-left:12px;background:#e0e0e0;color:#C41E3A;border:none;border-radius:6px;padding:3px 10px;cursor:pointer;font-size:0.95rem;';
+                delBtn.onclick = function() {
+                    history.splice(idx, 1);
+                    localStorage.setItem('dictationHistory', JSON.stringify(history));
+                    renderHistory();
+                };
+                div.appendChild(span);
+                div.appendChild(delBtn);
+                historyList.appendChild(div);
+            });
+        }
+        // 页面加载时渲染历史
+        renderHistory();
         document.getElementById('startBtn').onclick = async function() {
             const textarea = document.getElementById('words');
             let words = textarea.value.split(/\n|\r|\s+/).map(w => w.trim()).filter(w => w);
@@ -315,11 +447,15 @@
                 alert('请输入至少一个词语！');
                 return;
             }
+            // 保存到历史
+            saveHistory(words);
+            renderHistory();
             this.disabled = true;
             dictationTask = startDictation(words);
             await dictationTask;
             this.disabled = false;
         };
+
 
         // 兼容手机和PC的点击事件监听函数
         function addMultiEventListener(element, handler) {
@@ -333,25 +469,25 @@
         const pauseBtn = document.getElementById('pauseBtn');
         const resumeBtn = document.getElementById('resumeBtn');
         // 暂停按钮事件
+        // 暂停按钮事件（只控制流程暂停，不再调用speechSynthesis.pause，兼容所有设备）
         addMultiEventListener(pauseBtn, function() {
-            isPaused = true; // 设置为暂停状态
-            window.speechSynthesis.pause(); // 如果在用浏览器语音朗读，则暂停
+            isPaused = true; // 设置为暂停状态，流程会在下一个等待点停住
             pauseBtn.style.display = 'none'; // 隐藏暂停按钮
             resumeBtn.style.display = ''; // 显示继续按钮
         });
-        // 继续按钮事件
+        // 继续按钮事件（只控制流程继续，不再调用speechSynthesis.resume，兼容所有设备）
         addMultiEventListener(resumeBtn, function() {
             isPaused = false; // 恢复为非暂停状态
-            window.speechSynthesis.resume(); // 如果在用浏览器语音朗读，则继续
             if (pauseResolver) pauseResolver(); // 恢复异步等待
             pauseBtn.style.display = ''; // 显示暂停按钮
             resumeBtn.style.display = 'none'; // 隐藏继续按钮
         });
         // 【中文注释】
         // 1. 兼容手机和电脑，按钮都能正确切换
-        // 2. 听写过程中点击“暂停”，会暂停朗读并切换按钮为“继续”
-        // 3. 点击“继续”，恢复朗读并切换按钮为“暂停”
-        // 4. 按钮状态和isPaused变量始终保持同步
+        // 2. 听写过程中点击“暂停”，流程暂停等待用户点击“继续”
+        // 3. 点击“继续”，流程恢复到下一个朗读或等待点
+        // 4. 不再调用speechSynthesis.pause/resume，保证所有设备体验一致
+        // 5. 按钮状态和isPaused变量始终保持同步
 
         document.getElementById('nextBtn').onclick = function() {
             skipToNext = true;

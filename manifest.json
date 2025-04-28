@@ -1,6 +1,12 @@
 {
   "name": "汉语词语听写助手",
   "short_name": "听写助手",
+  "description": "适合手机和平板的汉语词语听写网站，支持添加到主屏幕，离线体验更佳。",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#fff8f0",
+  "theme_color": "#C41E3A",
+  "short_name": "听写助手",
   "start_url": "dictation.html",
   "display": "standalone",
   "background_color": "#fff8f0",
@@ -18,4 +24,7 @@
       "type": "image/png"
     }
   ]
+  // "scope": ".", // 可选，限制PWA作用范围
+  // "orientation": "portrait" // 可选，强制竖屏
+
 }
